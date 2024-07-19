@@ -1,0 +1,32 @@
+[
+    {
+        "time": "08:00:00",
+        "action": "早上喝水",
+        "type": "彈窗",
+        "image": "images/drink_water.gif"
+    },
+    {
+        "time": "15:00:00",
+        "action": "下午茶",
+        "type": "彈幕",
+        "image": "images/tea_time.gif"
+    },
+    {
+        "time": "21:45:00",
+        "action": "睡前冥想",
+        "type": "彈窗",
+        "image": "images/meditation.gif"
+    },
+    {
+        "time": "22:39:27",
+        "action": "vhbjnk",
+        "type": "彈窗",
+        "image": ""
+    },
+    {
+        "time": "22:40:43",
+        "action": "",
+        "type": "彈窗",
+        "image": ""
+    }
+]

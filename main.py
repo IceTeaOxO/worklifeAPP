@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QTimeEdit, QLabel, QMessageBox, QTableWidget, QTableWidgetItem, QAbstractItemView, QComboBox, QFileDialog, QDialog, QGridLayout, QHBoxLayout, QLineEdit
 from PyQt6.QtCore import QTimer, QTime, Qt, QUrl
-from PyQt6.QtGui import QMovie, QPixmap
+from PyQt6.QtGui import QMovie
 from PyQt6.QtMultimedia import QMediaPlayer
 
 class ReminderApp(QMainWindow):
@@ -28,11 +28,11 @@ class ReminderApp(QMainWindow):
         self.setting_button.clicked.connect(self.open_settings)
         main_layout.addWidget(self.setting_button)
 
-        # 建立定時器
+        # 初始化定時器
         self.timer = QTimer()
         self.timer.timeout.connect(self.show_reminder)
 
-        # 初始化設定
+        # 加載提醒事件
         self.load_reminders_from_json()
 
     def load_reminders_from_json(self):
@@ -41,16 +41,9 @@ class ReminderApp(QMainWindow):
         """
         try:
             with open("reminders.json", "r") as f:
-                data = json.load(f)
-                self.reminders = [QTime.fromString(item["time"], "hh:mm:ss") for item in data]
-                self.reminder_actions = {QTime.fromString(item["time"], "hh:mm:ss"): item["action"] for item in data}
-                self.reminder_types = {QTime.fromString(item["time"], "hh:mm:ss"): item["type"] for item in data}
-                self.reminder_images = {QTime.fromString(item["time"], "hh:mm:ss"): item["image"] for item in data}
+                self.reminders = json.load(f)
         except FileNotFoundError:
             self.reminders = []
-            self.reminder_actions = {}
-            self.reminder_types = {}
-            self.reminder_images = {}
 
     def start_reminder(self):
         """
@@ -60,34 +53,31 @@ class ReminderApp(QMainWindow):
         """
         if self.reminders:
             for reminder in self.reminders:
-                self.timer.start(reminder.secsTo(QTime.currentTime()) * 1000)
+                reminder_time = QTime.fromString(reminder["time"], "hh:mm:ss")
+                self.timer.start(reminder_time.secsTo(QTime.currentTime()) * 1000)
                 self.show_reminder(reminder)
         else:
             QMessageBox.information(self, "提醒", "尚未設定任何提醒事件")
 
-    def show_reminder(self, reminder=None):
+    def show_reminder(self, reminder):
         """
         顯示提醒。
-        如果有設定好的提醒事件,則依序彈出提醒。
         根據提醒類型,顯示彈窗提醒或彈幕提醒。
         """
-        if self.reminders:
-            if not reminder:
-                reminder = self.reminders.pop(0)
-            reminder_type = self.reminder_types[reminder]
-            if reminder_type == "彈窗":
-                self.show_popup_reminder(reminder)
-            elif reminder_type == "彈幕":
-                self.show_banner_reminder(reminder)
-            self.timer.start(reminder.secsTo(QTime.currentTime()) * 1000)
+        reminder_type = reminder["type"]
+        reminder_message = reminder["action"]
+        reminder_image = reminder.get("image", None)
 
-    def show_popup_reminder(self, reminder):
+        if reminder_type == "彈窗":
+            self.show_popup_reminder(reminder_message, reminder_image)
+        elif reminder_type == "彈幕":
+            self.show_banner_reminder(reminder_message, reminder_image)
+
+    def show_popup_reminder(self, reminder_message, reminder_image):
         """
         顯示彈窗提醒。
         根據設定,顯示文字提醒或文字加動畫提醒。
         """
-        reminder_message = self.reminder_actions[reminder]
-        reminder_image = self.reminder_images.get(reminder, None)
         if reminder_image:
             movie = QMovie(reminder_image)
             movie.start()
@@ -95,15 +85,12 @@ class ReminderApp(QMainWindow):
         else:
             QMessageBox.information(self, "提醒", reminder_message, QMessageBox.StandardButton.Ok)
 
-    def show_banner_reminder(self, reminder):
+    def show_banner_reminder(self, reminder_message, reminder_image):
         """
         顯示彈幕提醒。
         根據設定,播放音效或動畫,並顯示文字提醒。
         """
-        reminder_message = self.reminder_actions[reminder]
-        reminder_image = self.reminder_images.get(reminder, None)
         if reminder_image:
-            # 使用 QMediaPlayer 播放提醒音效或動畫
             media_player = QMediaPlayer()
             media_player.setSource(QUrl.fromLocalFile(reminder_image))
             media_player.play()
@@ -112,29 +99,12 @@ class ReminderApp(QMainWindow):
     def open_settings(self):
         """
         開啟設定對話框,管理提醒事件。
-        從 SettingsDialog 獲取更新後的提醒事件資料,並更新 ReminderApp 中的相應屬性。
         """
-        settings_dialog = SettingsDialog(self.reminders, self.reminder_actions, self.reminder_types, self.reminder_images, self)
-        if settings_dialog.exec() == QMessageBox.StandardButton.Ok:
-            self.reminders = settings_dialog.reminders
-            self.reminder_actions = settings_dialog.reminder_actions
-            self.reminder_types = settings_dialog.reminder_types
-            self.reminder_images = settings_dialog.reminder_images
-            self.save_reminders_to_json()
-
-    def save_reminders_to_json(self):
-        """
-        將提醒事件資料保存到 JSON 檔案中。
-        """
-        data = [
-            {"time": reminder.toString("hh:mm:ss"), "action": self.reminder_actions[reminder], "type": self.reminder_types[reminder], "image": self.reminder_images.get(reminder, "")}
-            for reminder in self.reminders
-        ]
-        with open("reminders.json", "w") as f:
-            json.dump(data, f, indent=4)
+        settings_dialog = SettingsDialog(self)
+        settings_dialog.exec()  # 使用 exec() 來顯示對話框並等待用戶操作
 
 class SettingsDialog(QDialog):
-    def __init__(self, reminders, reminder_actions, reminder_types, reminder_images, parent=None):
+    def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("設定提醒")
         self.setGeometry(100, 100, 600, 400)
@@ -164,26 +134,21 @@ class SettingsDialog(QDialog):
         main_layout.addLayout(button_layout)
 
         # 初始化表格
-        self.reminders = reminders
-        self.reminder_actions = reminder_actions
-        self.reminder_types = reminder_types
-        self.reminder_images = reminder_images
         self.populate_table()
 
     def populate_table(self):
         """
         將現有的提醒事件填充到表格中。
         """
-        self.table.setRowCount(len(self.reminders))
-        for i, reminder in enumerate(self.reminders):
-            time_item = QTableWidgetItem(reminder.toString("hh:mm:ss"))
-            action_item = QTableWidgetItem(self.reminder_actions[reminder])
-            type_item = QTableWidgetItem(self.reminder_types[reminder])
-            image_item = QTableWidgetItem(self.reminder_images.get(reminder, ""))
-            self.table.setItem(i, 0, time_item)
-            self.table.setItem(i, 1, action_item)
-            self.table.setItem(i, 2, type_item)
-            self.table.setItem(i, 3, image_item)
+        self.table.setRowCount(0)  # 清空表格
+        reminders = self.parent().reminders  # 獲取父類別的提醒事件
+        for reminder in reminders:
+            row_position = self.table.rowCount()
+            self.table.insertRow(row_position)
+            self.table.setItem(row_position, 0, QTableWidgetItem(reminder["time"]))
+            self.table.setItem(row_position, 1, QTableWidgetItem(reminder["action"]))
+            self.table.setItem(row_position, 2, QTableWidgetItem(reminder["type"]))
+            self.table.setItem(row_position, 3, QTableWidgetItem(reminder.get("image", "")))
 
     def add_reminder(self):
         """
@@ -191,17 +156,15 @@ class SettingsDialog(QDialog):
         """
         add_dialog = AddReminderDialog(self)
         if add_dialog.exec() == QMessageBox.StandardButton.Ok:
-            reminder_time = add_dialog.time_edit.time()
-            reminder_action = add_dialog.action_edit.text()
-            reminder_type = add_dialog.type_combo.currentText()
-            reminder_image = add_dialog.image_edit.text()
-
-            self.reminders.append(reminder_time)
-            self.reminder_actions[reminder_time] = reminder_action
-            self.reminder_types[reminder_time] = reminder_type
-            self.reminder_images[reminder_time] = reminder_image
-
-            self.populate_table()
+            new_reminder = {
+                "time": add_dialog.time_edit.time().toString("hh:mm:ss"),
+                "action": add_dialog.action_edit.text(),
+                "type": add_dialog.type_combo.currentText(),
+                "image": add_dialog.image_edit.text(),
+            }
+            self.parent().reminders.append(new_reminder)  # 將新提醒添加到父類別的提醒列表
+            self.populate_table()  # 更新表格顯示
+            self.save_reminders_to_json()  # 保存到 JSON
 
     def delete_reminder(self):
         """
@@ -209,11 +172,16 @@ class SettingsDialog(QDialog):
         """
         selected_rows = self.table.selectionModel().selectedRows()
         for row in reversed(selected_rows):
-            reminder = self.reminders.pop(row.row())
-            del self.reminder_actions[reminder]
-            del self.reminder_types[reminder]
-            del self.reminder_images[reminder]
-        self.populate_table()
+            del self.parent().reminders[row.row()]  # 刪除父類別中的提醒事件
+        self.populate_table()  # 更新表格顯示
+        self.save_reminders_to_json()  # 保存到 JSON
+
+    def save_reminders_to_json(self):
+        """
+        將提醒事件資料保存到 JSON 檔案中。
+        """
+        with open("reminders.json", "w") as f:
+            json.dump(self.parent().reminders, f, indent=4)  # 將父類別的提醒列表寫入 JSON
 
 class AddReminderDialog(QDialog):
     def __init__(self, parent=None):
